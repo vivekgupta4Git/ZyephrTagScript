@@ -1,0 +1,188 @@
+import openpyxl as op
+import re
+wb = op.load_workbook("zyephr_events.xlsx")
+
+ws = wb.worksheets[2]
+
+class PageEvent:
+    tagName = ''
+    values = ''
+
+class ButtonEvent:
+    values = ''
+
+class EventType:
+    eType  = ''
+
+def camelcase(s):
+    return ''.join(t.title() for t in s.split())
+    
+    
+#current page under investigation    
+cPage = "" 
+#analytic file
+aFile = camelcase(ws.title) + 'AnalyticsTag'
+#value file
+vFile = camelcase(ws.title) + 'ValueTag'
+extn = ".kt"
+f1 = open(aFile + extn,"w")
+f2 = open(vFile + extn,"w")
+
+#write package name
+pkg = "package com.health.zyephr.featureModules." + ws.title.lower() + ".tag \n\n"
+f1.write(pkg)
+f2.write(pkg)
+#making marks of this script :)
+myLabel = "\n // This file is generated using python script :)   \n"
+mySignature = "\n // Made by Vivek Gupta !! "
+f1.write(myLabel)
+f2.write(myLabel)
+#making a singleton 
+f1.write("object " + aFile + " { \n")
+f2.write("object " + vFile + " { \n")
+#dialogbox count
+dArray = ""
+#row starts from 3 
+for row in range(3,100):
+    et = EventType()
+    pt = PageEvent()
+    bt = ButtonEvent()
+    for col in range(2,8):
+        if ws.cell(row,2).value == 'pageName':
+            et.eType = "pageEvent"
+        elif ws.cell(row,3).value is not None and 'eVar' in ws.cell(row,3).value and ws.cell(row,4).value is None:
+            et.eType = "buttonEvent"    
+        elif ws.cell(row,4).value is not None and 'notification' in ws.cell(row,4).value:
+            et.eType = "notification"  
+
+    
+        if et.eType == 'pageEvent':
+            # as col#4 is for tagName in the excel sheet
+            if col == 4:
+                #set the tagName for the event
+                pt.tagName = ws.cell(row,4).value
+                
+                #set the global variable for current page
+                cPage = pt.tagName
+                #as Col#7 is value in the excel sheet
+                separator= "\n /*********************************************************************************/ \n"
+                f1.write(separator)
+                f2.write(separator)
+            if col == 7:
+                pt.values= ws.cell(row,7).value
+                #creating a pageEvent
+                
+                pageEventTag = 'const val ' + pt.tagName.upper() + ' = "' + pt.tagName + '" \n'
+                f1.write(pageEventTag)
+                #excel sheet contains values separated by the 'forward slash'
+                #below condition write at least one property for the event.
+                s = pt.values.split("/",1)
+                pageEventValue = 'val ' + pt.tagName.upper() + '_ENTER_VALUE' + ' = listOf("' + s[0] + '")'
+                f2.write(pageEventValue)
+                f2.write("\n")
+                # if the values is more than one i.e forward slash is present, write another property
+                if len(s) > 1:
+                    #second value
+                    pageEventValue2 = 'val ' + pt.tagName.upper() + '_EXIT_VALUE' + ' =  listOf("' + s[1] + '")'
+                    f2.write(pageEventValue2)
+                        #'val ' + pt.tagName.upper() + '_EXIT_VALUE' + ' =  listOf("'
+                        #  + m[0] +':' 
+                        #  + s[1] + '")'
+                    f2.write("\n")
+                            
+        elif et.eType == 'buttonEvent':
+            if col == 7:
+                currentButton2 = ""
+                currentButton1 = ""
+                buttonFromAnalytic = ""
+                buttonFromAnalytic2 = ""
+                #column 7 is the value of the button so making tag using values..
+                bt.values= ws.cell(row,7).value
+                if bt.values is not None:
+                    # values are separated by 'new line character' in the excel sheet
+                    s = bt.values.split("\n")
+                    if len(s) >1:
+                        buttonNameParts = s[1].split("/")
+                        #creating a button tag
+                        #appending current page before each button tag and replacing every space with underscore
+                        #second text is the button name in the sheet, first one is of previousPage, third one is of value of button
+                        if len(buttonNameParts) > 1:
+                            currentButton2 = cPage.upper() + '_' +  buttonNameParts[1].upper().strip().replace(' ','_').replace("<","").replace(">","") 
+                            buttonFromAnalytic2 = aFile + '.' + currentButton2.upper()
+                            buttonTag2 = 'const val ' + currentButton2  + ' = "' + buttonNameParts[1].strip().replace(' ','_').replace("<","").replace(">","")  + '"'
+                            f1.write(buttonTag2)
+                            f1.write("\n")  
+                        
+                        currentButton1 = cPage.upper() + '_' +  buttonNameParts[0].upper().strip().replace(' ','_').replace("<","").replace(">","")
+                        buttonFromAnalytic = aFile + '.' + currentButton1.upper()
+                        buttonTag = 'const val ' + currentButton1 + ' = "' + buttonNameParts[0].strip().replace(' ','_').replace("<","").replace(">","")  + '"'
+                        f1.write(buttonTag)
+                        f1.write("\n")
+              
+                    
+                    if len(s)>2 :
+                        vList = []
+                        m = re.findall('<(.+?)>',s[2])
+                        if m:
+                            f2.write('fun ' + currentButton1 + '_VALUE(')
+                            for arg in m:
+                                buttonValueParts = arg.split("/")
+                                part1 =buttonValueParts[0].lower().strip().replace(' ','_')
+                                if len(buttonValueParts)==2 :
+                                    part2 =buttonValueParts[1].lower().strip().replace(' ','_')
+                                
+                                variable=part1 + part2.title()    
+                                vList.append(variable)
+                                part2 = ""
+                                f2.write(variable + ': String,')
+                             
+                            f2.write(') = listOf("' + s[0].title() + ' " , ' + buttonFromAnalytic  + ',' + '"')
+                            
+                            if len(vList) == len(m):
+                                for i in range(len(m)):
+                                    s[2] =s[2].replace("<"+m[i]+">","$" + vList[i] + " ")
+                                
+                            f2.write(s[2] + '")') 
+                            f2.write("\n")            
+             
+                        else:
+                            buttonValue = 'val ' + currentButton1  + '_VALUE = listOf("' + s[0].title() + ' " ,'+buttonFromAnalytic + ', " ' + s[2] + ' ")'
+                            f2.write(buttonValue)
+                            f2.write("\n")            
+                        
+                     
+        elif et.eType == 'notification':
+            if ws.cell(row,4).value is not None:
+                dArray = ws.cell(row,4).value
+                
+            
+            dCount = dArray.split(" ")
+            if len(dCount)>1 :
+                dName = dCount[1].upper()
+                if col == 7:
+                    v = ws.cell(row,7).value
+                    if v is not None:
+                        s = v.split("\n")
+                        if len(s)>2 :
+                            line = "const val NOTIFICATION_DIALOG_" + dName + ' =  "' + s[1].lower() + '"' 
+                            f1.write(line)
+                            f1.write("\n")
+                            if "<" not in s[2] and ">" not in s[2]:
+                                lineValue = "val NOTIFICATION_DIALOG_" + dName + '_VALUE = listOf("' + s[0].title() + '" , ' + aFile + '.' + 'NOTIFICATION_DIALOG_' + dName + ', "' + s[2] + ' ")'
+                                f2.write(lineValue)
+                                f2.write("\n")
+                            else:
+                                m = re.search('<(.+?)>',s[2])
+                                if m:
+                                    found = m.group(1)
+                                    d = found.lower().strip().replace(' ','_').replace("<","").replace(">","")
+                                    lineValue = 'fun NOTIFICATION_DIALOG_' + dName + '_VALUE(' + d  + ': String) = listOf("' + s[0] + ' ", ' +  aFile + '.' + 'NOTIFICATION_DIALOG_' + dName + '," ' + s[2].strip().replace("<"+ found + ">","$" + found.lower() + ' ")')
+                                    f2.write(lineValue)
+                                    f2.write("\n")
+                                
+f1.write("}")    
+f2.write("}")
+f1.write(mySignature)
+f2.write(mySignature)
+f1.close()
+f2.close()
