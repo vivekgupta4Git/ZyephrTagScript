@@ -54,7 +54,8 @@ for row in range(3,100):
             et.eType = "buttonEvent"    
         elif ws.cell(row,4).value is not None and 'notification' in ws.cell(row,4).value:
             et.eType = "notification"  
-
+        elif ws.cell(row,4).value is not None and 'exit Link' in ws.cell(row,4).value:
+            et.eType = "exitLink"
     
         if et.eType == 'pageEvent':
             # as col#4 is for tagName in the excel sheet
@@ -119,7 +120,7 @@ for row in range(3,100):
                         f1.write(buttonTag)
                         f1.write("\n")
               
-                    
+                    part2 = ""
                     if len(s)>2 :
                         vList = []
                         m = re.findall('<(.+?)>',s[2])
@@ -179,6 +180,25 @@ for row in range(3,100):
                                     lineValue = 'fun NOTIFICATION_DIALOG_' + dName + '_VALUE(' + d  + ': String) = listOf("' + s[0] + ' ", ' +  aFile + '.' + 'NOTIFICATION_DIALOG_' + dName + '," ' + s[2].strip().replace("<"+ found + ">","$" + found.lower() + ' ")')
                                     f2.write(lineValue)
                                     f2.write("\n")
+                                    
+                                    
+        elif et.eType == 'exitLink':
+            if col == 7:
+                if ws.cell(row,7).value is not None:
+                    vCell = ws.cell(row,7).value
+                    if vCell is not None:
+                        vArray = vCell.split("\n")
+                        if len(vArray)>3:
+                            b = cPage.upper() + '_' +  vArray[2].upper().strip().replace(' ','_').replace("<","").replace(">","")
+                            ab = aFile + '.' + b
+                            line = "const val " + b + ' = "' + vArray[2] + '"' 
+                            f1.write(line)
+                            f1.write("\n")
+                            line2 = 'val '  + b + '_VALUE = listOf("' + vArray[0]+ '", "' +vArray[1]+ '",' + ab + ',"' + vArray[3] + '")' 
+                            f2.write(line2)
+                            f2.write('\n')
+                        
+                
                                 
 f1.write("}")    
 f2.write("}")
